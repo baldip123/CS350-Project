@@ -1,0 +1,40 @@
+1.SAS is implemented as a dictionary, where:
+	a)keys : store variables, having integer types
+	b)values : let the key be v1, then value can be one of the following:
+		1)equivalence(v1) (of record type) this indicates that v1 is unbound an is the last element in the chain
+						   corresponding to it's equivalence class.
+		2)reference(v2) : this indicates that v1 is in the same equivalence class as v1.
+		3)literal(z) Z: this indicates that v1 is bound to the value z.
+		4)it can be [record .....] as well.
+		5)A procedure as well, pay special attention to procedures.
+	c)note that to get representative for the equivalence class in which v1 belongs you need to traverse to the end of the 
+	  refernce chain.
+
+2.Functions/Procedures in SAS:
+	a.{RetrievefromSAS X}
+		It takes the key X which should be integer as mentioned above. 
+		Throws error keyNotPresentInSAS(X) if key X os not present in SAS.
+		If key X is present it return 
+			1)If key X is in an equivalence class bound to a value z() i.e the value in the dictionary is literal(z), 				it returns the literal(z) and not z.
+			  Note : Here only the representative will have its value as literal(z), and for reaching it the referece 				 chain will be traversed.
+			2)If its in an unbound equivalence class, return equivalence(v2), where v2 is the representative
+			for the equivalence class in which key X belongs.
+	
+	b.{BindValueToKeyInSAS Key Val}
+		Constraints on input parameter Key:
+			Note that the value in the dictionary corresponding to Key must be equivalence(Key) and not anything else.
+			Otherwise this function is not called in unify.oz. If Key is already bound to a value if it's compatible 				is checked in unify.oz itself. Also Value will already have the outside enclosing literal.
+	c.{BindRefToKeyInSAS Key RefKey}
+		Note that the value in the dictionary corresponding to Key and RefKey both must be must be equivalence(Key) and 
+		equivalence(RefKey) respectivley and not anything else. Also if Key ==  RefKey do nothing.
+		{Dictionary.put SAS Key reference(RefKey)}
+		//Remove this line before submitting
+		Note that Yugesh's code has a mistake that when the Key and RefKey are equal, it leads to a problem.
+
+	d.fun {AddKeyToSAS}
+		  %{Browse 'AddKeyToSAS'}
+		  C:=@C+1
+		  {Dictionary.put SAS @C equivalence(@C)}
+		  @C
+		end
+		
