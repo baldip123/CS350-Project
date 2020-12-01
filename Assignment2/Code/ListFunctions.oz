@@ -17,7 +17,6 @@ fun {Filter Xs P}
 end
 
 proc {Map Xs F ?Ys}
-   {Browser.browse map#Xs}
    case Xs
    of nil then Ys=nil
    [] X|Xr then Ys={F X}|{Map Xr F}
