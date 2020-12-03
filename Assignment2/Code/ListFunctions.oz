@@ -59,5 +59,5 @@ proc {QuickSort Xs LessThan  ?Ys}
    end
 end
 
-{Browser.browse {QuickSort  [7 6 1 3 5] fun {$ X Y} X<Y end}}
+
 
