@@ -28,10 +28,10 @@ fun {Add X Y Env}
             []literal(C) then
                 literal(B+C)
             else
-                {Exception.'raise' secondArgumentUnbound}
+                {Exception.'raise' secondArgumentNotBoundToLiteral(Y)}
             end
         else
-            {Exception.'raise' firstArgumentUnbound}
+            {Exception.'raise' firstArgumentNotBoundToLiteral(X)}
         end
     end
 end
@@ -60,10 +60,10 @@ fun {Mul X Y Env}
             []literal(C) then
                 literal(B*C)
             else
-                {Exception.'raise' secondArgumentNotLiteral}
+                {Exception.'raise' secondArgumentNotBoundToLiteral(Y)}
             end
         else
-            {Exception.'raise' firstArgumentNotLiteral}
+            {Exception.'raise' secondArgumentNotBoundToLiteral(X)}
         end
     end
 end
@@ -431,14 +431,14 @@ end
 proc {Interpret}
    {Browse calledInterPret}
   %Skip when the stack is empty
-  if {IsEmpty SemanticStack} then {Browse executionFinished}
+  if {IsEmpty SemanticStack} then {PrintSAS} {Browse executionFinished}
   else
     {Browse @SemanticStack}
     {PrintSAS}
-    {Browse a}
-    {Browse a}
-    {Browse a}
-    {Browse a}
+    {Browse executionStatePrinted}
+    {Browse executionStatePrinted}
+    {Browse proceedingToNextExecution}
+    {Browse proceedingToNextExecution}
     local SemanticStatement in
       %POP THE STACK
        SemanticStatement = {Pop SemanticStack}
@@ -469,6 +469,10 @@ end
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(x) [nop]]] env:env())}
 %{Interpret}
 
+%TEST4.a Checking if environment reverts to old
+%{Push SemanticStack semstate(st:[var ident(x) [[var ident(x) [nop]] [nop]]] env:env())}
+%{Interpret}
+
 %TEST 5
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(x) [[nop] [nop]]]] env:env())}
 %{Interpret}
@@ -486,6 +490,10 @@ end
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) ident(y)] [bind ident(y) ident(z)] [bind ident(z) ident(x)]]]]] env:env())}
 %{Interpret}
 
+%TEST 8.a
+%{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) ident(y)] [bind ident(x) ident(z)] [bind ident(z) ident(y)]]]]] env:env())}
+%{Interpret}
+
 %3.Testing  VAR LITERAL Bind
 %TEST 9
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [bind ident(x) literal(3)]]] env:env())}
@@ -495,20 +503,45 @@ end
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) ident(y)] [bind ident(y) ident(z)] [bind ident(x) literal(3)]]]]] env:env())}
 %{Interpret}
 
+%TEST 10.a Failure Test
+%{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) ident(y)] [bind ident(y) ident(z)] [bind ident(x) literal(3)] [bind ident(y) literal(a)]]]]] env:env())}
+%{Interpret}
+
 %4.Testing ADD MUL
 %TEST 11
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) literal(3)] [add ident(z) ident(x) literal(3)]]]]] env:env())}
 %{Interpret}
 
+%TEST 11.a Failure Case
+%{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) literal(3)] [add ident(z) ident(y) literal(3)]]]]] env:env())}
+%{Interpret}
+
+
 %TEST 12
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) literal(3)] [bind ident(y) literal(7)] [mul ident(z) ident(x) ident(y)]]]]] env:env())}
 %{Interpret}
+
+%TEST 12.a Failure, as z is already bound to a value
+%{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(x) literal(3)] [bind ident(z) literal(20)] [bind ident(y) literal(7)] [mul ident(z) ident(x) ident(y)]]]]] env:env())}
+%{Interpret}
+
 
 %5.Testing records
 %TEST 13
 %{Push SemanticStack semstate(st:[var ident(x) [var ident(y) [var ident(z) [[bind ident(z) [record literal(a) [[literal(1) ident(x)]]]] [bind ident(z) [record literal(a) [[literal(1) ident(y)]]]]]]]] env:env())}
 %{Interpret}
 
+%TEST 14 - Circular records
+%{Push SemanticStack semstate(st:[var ident(x) [bind ident(x) [record literal(list) [[literal(1) literal(1)] [literal(2) ident(x)]] ] ]] env:env())}
+%{Interpret}
+
+%TEST 14.a - Circular Records 2
+%X = 1|Y
+%Y = 1|X
+%declare S
+%S = [[bind ident(x) [record literal(list) [[literal(1) literal(1)] [literal(2) ident(y)]]]] [bind ident(y) [record literal(list) [[literal(1) literal(1)] [literal(2) ident(x)]]]] ]
+%{Push SemanticStack semstate(st:[var ident(x) [var ident(y) S ]] env:env())}
+%{Interpret}
 
 
 %4.c Testing function values
@@ -520,7 +553,64 @@ end
 %                                                 ]]]] env:env())}
 %{Interpret}
 
+%TEST 15.1 Closure for Bind to Record in a procedure, you can change identifier for hitting different braches
+%declare ProcVal RecordVal
+%RecordVal = [record literal(a) [[literal(1) ident(z3)]]]
+%ProcVal = [procedure [ident(x1) ident(x2)] [bind ident(x1) RecordVal]]
+%{Push SemanticStack semstate(st:[var ident(x)
+%				 [var ident(y)
+%				  [var ident(z)
+%				   [bind ident(z) ProcVal]
+%				  ]
+%				 ]
+%				]    env:env())}
+%{Interpret}
 
+%TEST 15.2 Closure for Bind with var in it
+%declare ProcVal = [procedure [ident(x)] [var ident(y) [bind ident(x1) ident(y)]]]
+%{Push SemanticStack semstate(st:[var ident(x)
+%				 [var ident(y)
+%				  [var ident(z)
+%				   [bind ident(z) ProcVal]
+%				  ]
+%				 ]
+%				]    env:env())}
+%{Interpret}
+
+
+%TEST 15.3 Closure for apply
+%declare ProcVal
+%declare ProcVal2
+% ProcVal =  [procedure [ident(x1)] [var ident(y) [bind ident(x1) ident(y)]]]
+%ProcVal2 = [procedure [ident(x2)] [apply ident(z) ident(x2)]]
+%{Push SemanticStack semstate(st:[var ident(x)
+%				 [var ident(y)
+%				  [var ident(z)
+%				   [
+%				    [bind ident(z) ProcVal]
+%				    [var ident(t) [bind ident(t) ProcVal2]]
+%				   ]
+%				  ]
+%				 ]
+%				]    env:env())}
+%{Interpret}
+
+%TEST 15.4 Closure for compound statements in apply
+%declare ProcVal
+%declare ProcVal2
+% ProcVal =  [procedure [ident(x1)] [var ident(y) [[bind ident(x1) ident(y)] [bind ident(x1) ident(x)]]   ]]
+%ProcVal2 = [procedure [ident(x2)] [apply ident(z) ident(x2)]]
+%{Push SemanticStack semstate(st:[var ident(x)
+%				 [var ident(y)
+%				  [var ident(z)
+%				   [
+%				    [bind ident(z) ProcVal]
+%				    [var ident(t) [bind ident(t) ProcVal2]]
+%				   ]
+%				  ]
+%				 ]
+%				]    env:env())}
+%{Interpret}
 
 %TEST 15
 %Should Give Failure as Y is unbound
@@ -573,3 +663,91 @@ end
 
 %Also checked for cases where a)label is different, b)features are different c)features are same but in diff orders
 %NOW CHECK FOR CASES WHICH VERIFY THAT ENVIRONMENT IS BEING PASSED ON CORRECTLY
+
+%TEST18
+%{Push SemanticStack semstate(st:[var ident(x)
+%                                              [
+%                                                   [bind ident(x) [record literal(a) [[literal(c) literal(3)] [literal(b) literal(2)]]] ]
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [nop] [nop]
+%                                                    ]
+%                                              ]
+%                                 ]
+%                                 env:env())}
+%{Interpret}
+
+%TEST19
+%{Push SemanticStack semstate(st:[var ident(x)
+%                                              [
+%                                                   [bind ident(x) [record literal(a) [[literal(c) literal(3)] [literal(b) literal(2)][literal(d) literal(5)]]] ]
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [nop] [nop]
+%                                                    ]
+%                                              ]
+%                                 ]
+%                                 env:env())}
+%{Interpret}
+
+%TEST20
+%{Push SemanticStack semstate(st:[var ident(x)
+%                                              [
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [nop] [nop]
+%                                                    ]
+%                                              ]
+%                                 ]
+%                                 env:env())}
+%{Interpret}
+
+%TEST21
+%{Push SemanticStack semstate(st:[var ident(x)[ var ident(y) [ var ident(z)
+%                                              [
+%                                                   [bind ident(x) [record literal(a) [[literal(c) ident(y)] [literal(b) ident(z)]] ]]
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [nop] [nop]
+%                                                    ]
+%                                              ]
+%                                 ]]]
+%                                 env:env())}
+%{Interpret}
+
+%TEST22
+%{Push SemanticStack semstate(st:[var ident(x)
+%                                              [
+%                                                   [bind ident(x) [record literal(a) [[literal(b) [record literal(k) [[literal(d) literal(2)] [literal(e) literal(3)]]]] [literal(c) literal(3)]]] ]
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [nop] [nop]
+%                                                    ]
+%                                              ]
+%                                 ]
+%                                 env:env())}
+%{Interpret}
+
+%TEST23
+%{Push SemanticStack semstate(st:[var ident(x)[ var ident(y) [var ident(z)
+%                                              [
+%                                                   [bind ident(x) [record literal(a) [[literal(b) [record literal(k) [[literal(d) literal(2)] [literal(e) literal(3)]]]] [literal(c) literal(3)]]] ]
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [bind ident(y) literal(8)] [bind ident(z) literal(7)]
+%                                                    ]
+%                                              ]
+%                                 ]]]
+%                                 env:env())}
+%{Interpret}
+
+%TEST24
+%{Push SemanticStack semstate(st:[var ident(x)[ var ident(y) [var ident(z)
+%                                              [
+%                                                   [bind ident(x) [record literal(b) [[literal(b) [record literal(k) [[literal(d) literal(2)] [literal(e) literal(3)]]]] [literal(c) literal(3)]]] ]
+%                                                   [match ident(x) [record literal(a)
+%                                                                   [[literal(b) ident(p)] [literal(c) ident(q)] ]] [bind ident(y) literal(8)] [bind ident(z) literal(7)]
+%                                                    ]
+%                                              ]
+%                                 ]]]
+%                                 env:env())}
+%{Interpret}
+
+%6.Tests for function application
+%TEST25
+%{Push SemanticStack statement(st:[var ident(q) [ [bind ident(q) literal(10)] [var ident(x) [var ident(z) [[bind ident(z) [procedure [ident(y)] [bind ident(x) ident(y)]]] [apply ident(z) ident(q)]]]]]] env:env())}
+%{Interpret}
